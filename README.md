@@ -1,5 +1,6 @@
 # Arc-VQVAE
 
+![teaser](assets/rec.png)
 
 ## Requirements
 A suitable [conda](https://conda.io/) environment named `taming` can be created
