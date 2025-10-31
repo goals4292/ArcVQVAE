@@ -1,4 +1,4 @@
-# Arc-VQVAE
+# ArcVQ-VAE
 
 ![teaser](assets/rec.png)
 
@@ -82,7 +82,7 @@ pretrained model의 학습을 재개하고 싶으면 `--resume "your/ckpt/path"`
 config 파일에 있는 하이퍼 파라미터 세팅은 batch_size와 num_workers 값을 제외한 나머지는 최대한 건들지 않는 것을 추천 드립니다. 코드북 학습이 붕괴될 수 있습니다.  
 (We recommend leaving all hyperparameter settings in the config file unchanged, except for batch_size and num_workers, as this can disrupt codebook learning.)
 
-## Arc-VQVAE Implementation
+## ArcVQ-VAE Implementation
 
 ArcLoss는 `taming/modules/losses/vqperceptual.py` 파일에 구현되어 있으며,  
 BBNR은 `taming/modules/vqvae/quantize.py` 파일에 구현되어 있으니 참조 바랍니다. 
