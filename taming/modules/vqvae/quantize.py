@@ -228,6 +228,7 @@ class VectorQuantizer2(nn.Module):
 
         self.embedding = nn.Embedding(self.n_e, self.e_dim)
         self.embedding.weight.data.uniform_(-1.0 / self.n_e, 1.0 / self.n_e)
+        self._init_spherical_codebook()
 
         self.remap = remap
         if self.remap is not None:
@@ -243,6 +244,29 @@ class VectorQuantizer2(nn.Module):
             self.re_embed = n_e
 
         self.sane_index_shape = sane_index_shape
+
+    def _init_spherical_codebook(self):
+        with torch.no_grad():
+            self.embedding.weight.data.uniform_(-1., 1.)
+            self.embedding.weight.data = F.normalize(
+                self.embedding.weight.data, p=2, dim=1
+                ) * 1.0
+
+    # BBNR
+    def clip_codebook_norms(self, step, alpha=0.000005):
+        if step is None:
+            return
+        with torch.no_grad():
+            weight = self.embedding.weight
+            norms = torch.norm(weight, p=2, dim=1, keepdim=True)
+
+            max_norm = torch.exp(torch.tensor(alpha * step))
+            max_norm = max_norm.to(weight.device)
+
+            clipped_weight = weight * (max_norm / norms)
+            mask = (norms > max_norm).float()
+            weight.data = mask * clipped_weight + (1 - mask) * weight
+
 
     def remap_to_used(self, inds):
         ishape = inds.shape
@@ -268,7 +292,9 @@ class VectorQuantizer2(nn.Module):
         back=torch.gather(used[None,:][inds.shape[0]*[0],:], 1, inds)
         return back.reshape(ishape)
 
-    def forward(self, z, temp=None, rescale_logits=False, return_logits=False):
+    def forward(self, z, temp=None, rescale_logits=False, return_logits=False, step=None):
+        self.clip_codebook_norms(step, alpha=0.000005)
+
         assert temp is None or temp==1.0, "Only for interface compatible with Gumbel"
         assert rescale_logits==False, "Only for interface compatible with Gumbel"
         assert return_logits==False, "Only for interface compatible with Gumbel"
@@ -277,12 +303,13 @@ class VectorQuantizer2(nn.Module):
         z_flattened = z.view(-1, self.e_dim)
         # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
 
-        d = torch.sum(z_flattened ** 2, dim=1, keepdim=True) + \
-            torch.sum(self.embedding.weight**2, dim=1) - 2 * \
-            torch.einsum('bd,dn->bn', z_flattened, rearrange(self.embedding.weight, 'n d -> d n'))
-
-        min_encoding_indices = torch.argmin(d, dim=1)
+        # cosine similarity 기반으로
+        z_normalized = F.normalize(z_flattened, p=2, dim=1)
+        codebook = F.normalize(self.embedding.weight, p=2, dim=1)  # (n_e, e_dim)
+        similarity = torch.matmul(z_normalized, codebook.T)  # (N, n_e)
+        min_encoding_indices = torch.argmax(similarity, dim=1)
         z_q = self.embedding(min_encoding_indices).view(z.shape)
+
         perplexity = None
         min_encodings = None
 
@@ -309,7 +336,18 @@ class VectorQuantizer2(nn.Module):
             min_encoding_indices = min_encoding_indices.reshape(
                 z_q.shape[0], z_q.shape[2], z_q.shape[3])
 
+        # ===============================
+        # Codebook usage logging
+        # ===============================
+        if self.training and min_encoding_indices is not None:
+            flat_indices = min_encoding_indices.view(-1)
+            unique_codes = torch.unique(flat_indices)
+            with open("codebook_usage_log.txt", "a") as f:
+                f.write(f"[Step {step}] Used {unique_codes.numel()}/{self.n_e} codebook entries: {unique_codes.tolist()}\n")
+        # ===============================
+
         return z_q, loss, (perplexity, min_encodings, min_encoding_indices)
+    
 
     def get_codebook_entry(self, indices, shape):
         # shape specifying (batch, height, width, channel)

@@ -55,7 +55,8 @@ class VQModel(pl.LightningModule):
     def encode(self, x):
         h = self.encoder(x)
         h = self.quant_conv(h)
-        quant, emb_loss, info = self.quantize(h)
+        self.last_z_e = h
+        quant, emb_loss, info = self.quantize(h, step = self.global_step)
         return quant, emb_loss, info
 
     def decode(self, quant):
@@ -87,7 +88,8 @@ class VQModel(pl.LightningModule):
         if optimizer_idx == 0:
             # autoencode
             aeloss, log_dict_ae = self.loss(qloss, x, xrec, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
+                                            last_layer=self.get_last_layer(), split="train",
+                                            z_e_x=self.last_z_e, codebook_weight=self.quantize.embedding.weight)
 
             self.log("train/aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
             self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
@@ -105,7 +107,8 @@ class VQModel(pl.LightningModule):
         x = self.get_input(batch, self.image_key)
         xrec, qloss = self(x)
         aeloss, log_dict_ae = self.loss(qloss, x, xrec, 0, self.global_step,
-                                            last_layer=self.get_last_layer(), split="val")
+                                            last_layer=self.get_last_layer(), split="val",
+                                            z_e_x=self.last_z_e, codebook_weight=self.quantize.embedding.weight)
 
         discloss, log_dict_disc = self.loss(qloss, x, xrec, 1, self.global_step,
                                             last_layer=self.get_last_layer(), split="val")

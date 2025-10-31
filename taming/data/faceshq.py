@@ -25,7 +25,7 @@ class FacesBase(Dataset):
             ex = example
         return ex
 
-
+"""
 class CelebAHQTrain(FacesBase):
     def __init__(self, size, keys=None):
         super().__init__()
@@ -46,12 +46,12 @@ class CelebAHQValidation(FacesBase):
         paths = [os.path.join(root, relpath) for relpath in relpaths]
         self.data = NumpyPaths(paths=paths, size=size, random_crop=False)
         self.keys = keys
-
+"""
 
 class FFHQTrain(FacesBase):
     def __init__(self, size, keys=None):
         super().__init__()
-        root = "data/ffhq"
+        root = "/home/work/datasets/FFHQ/images1024x1024"
         with open("data/ffhqtrain.txt", "r") as f:
             relpaths = f.read().splitlines()
         paths = [os.path.join(root, relpath) for relpath in relpaths]
@@ -62,7 +62,7 @@ class FFHQTrain(FacesBase):
 class FFHQValidation(FacesBase):
     def __init__(self, size, keys=None):
         super().__init__()
-        root = "data/ffhq"
+        root = "/home/work/datasets/FFHQ/images1024x1024"
         with open("data/ffhqvalidation.txt", "r") as f:
             relpaths = f.read().splitlines()
         paths = [os.path.join(root, relpath) for relpath in relpaths]
@@ -73,9 +73,8 @@ class FFHQValidation(FacesBase):
 class FacesHQTrain(Dataset):
     # CelebAHQ [0] + FFHQ [1]
     def __init__(self, size, keys=None, crop_size=None, coord=False):
-        d1 = CelebAHQTrain(size=size, keys=keys)
         d2 = FFHQTrain(size=size, keys=keys)
-        self.data = ConcatDatasetWithIndex([d1, d2])
+        self.data = ConcatDatasetWithIndex([d2])
         self.coord = coord
         if crop_size is not None:
             self.cropper = albumentations.RandomCrop(height=crop_size,width=crop_size)
@@ -103,11 +102,9 @@ class FacesHQTrain(Dataset):
 
 
 class FacesHQValidation(Dataset):
-    # CelebAHQ [0] + FFHQ [1]
     def __init__(self, size, keys=None, crop_size=None, coord=False):
-        d1 = CelebAHQValidation(size=size, keys=keys)
         d2 = FFHQValidation(size=size, keys=keys)
-        self.data = ConcatDatasetWithIndex([d1, d2])
+        self.data = ConcatDatasetWithIndex([d2])
         self.coord = coord
         if crop_size is not None:
             self.cropper = albumentations.CenterCrop(height=crop_size,width=crop_size)
